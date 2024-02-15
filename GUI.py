@@ -1,13 +1,22 @@
 import pygame
-import sys
-import math
+import sys, math, socket, ast
 from inputbox import InputBox
 from pygame.locals import *
+
+host = socket.gethostname()
+port = 5000
+client_socket = socket.socket()
+client_socket.connect((host, port))
+
+response = 'OK'
+client_socket.send(response.encode())
 
 pygame.init()
 
 screen_width = 1440
 screen_height = 720
+FIELD_LENGTH = 90   # x
+FIELD_WIDTH = 46    # y
 
 # Setting screen size and name for application
 screen = pygame.display.set_mode((screen_width, screen_height))
@@ -36,6 +45,17 @@ clock = pygame.time.Clock()
 run = True
 while run:
 
+    first_packet = client_socket.recv(1024).decode()
+    print(first_packet)
+
+    num_packets = int(first_packet[0])
+    data = first_packet[1:]
+    points = ast.literal_eval(data)
+    for i in range(num_packets - 1):
+        packet = client_socket.recv(1024).decode()
+        points.append(ast.literal_eval(packet))
+    response = 'OK'
+    client_socket.send(response.encode())
 
     # Fills Screen with a green box, outlines it with black and white lines
     screen.fill((55, 155, 90))
@@ -92,6 +112,11 @@ while run:
     # draw line from center of rectangle to center of QB
     pygame.draw.line(screen, 'black', (x2, y2), (x3, y3), 3)
 
+    for point in points:
+        transformed_point = (point[0] * screen_width / FIELD_LENGTH, point[1] * screen_height / FIELD_WIDTH)
+        print(transformed_point)
+        pygame.draw.circle(screen, 'red', transformed_point, 5)
+
     # Write magnitude and angle from rectangle to QB
     magX = x3-x2
     magY = y3-y2
@@ -108,3 +133,4 @@ while run:
     pygame.display.flip()
 
 pygame.quit()
+client_socket.close()
