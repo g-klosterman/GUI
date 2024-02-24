@@ -1,11 +1,16 @@
 import pygame
-import sys, math, socket, ast
+import sys, math, socket, ast, random
 from inputbox import InputBox
 from pygame.locals import *
 
-host = socket.gethostname()
+def random_color():
+    levels = range(32,256,32)
+    return tuple(random.choice(levels) for _ in range(3))
+
+host = 'overheadcam'    #socket.gethostname()
+print(host)
 port = 5000
-client_socket = socket.socket()
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client_socket.connect((host, port))
 
 response = 'OK'
@@ -13,13 +18,13 @@ client_socket.send(response.encode())
 
 pygame.init()
 
-screen_width = 1440
-screen_height = 720
+SCREEN_WIDTH = 1440
+SCREEN_HEIGHT = 720
 FIELD_LENGTH = 90   # x
 FIELD_WIDTH = 46    # y
 
 # Setting screen size and name for application
-screen = pygame.display.set_mode((screen_width, screen_height))
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Scan & Score")
 text_font = pygame.font.SysFont("Arial", 30)
 
@@ -45,22 +50,33 @@ clock = pygame.time.Clock()
 run = True
 while run:
 
-    first_packet = client_socket.recv(1024).decode()
-    print(first_packet)
+    data = client_socket.recv(1024).decode()#.replace('][', ', ')
+    print(data)
 
-    num_packets = int(first_packet[0])
-    data = first_packet[1:]
-    points = ast.literal_eval(data)
-    for i in range(num_packets - 1):
-        packet = client_socket.recv(1024).decode()
-        points.append(ast.literal_eval(packet))
-    response = 'OK'
-    client_socket.send(response.encode())
+    points = []
+    while data != 'EOT':
+
+        response = 'OK'
+        try:
+            points += ast.literal_eval(data)
+
+        except:
+            response = 'BAD'
+            break
+
+        print(response)
+        client_socket.send(response.encode())
+
+        data = client_socket.recv(1024).decode()#.replace('][', ', ')
+    #input('Data received. Continue?')
+
+    client_socket.send('OK'.encode())
+    print(data)
 
     # Fills Screen with a green box, outlines it with black and white lines
     screen.fill((55, 155, 90))
-    pygame.draw.rect(screen, ('white'), (0, 0, 1440, 720), width=20)
-    pygame.draw.rect(screen, ('black'), (0, 0, 1440, 720), width=5)
+    pygame.draw.rect(screen, ('white'), (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), width=20)
+    pygame.draw.rect(screen, ('black'), (0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), width=5)
 
     # Creates vertical lines every 240 pixels to simulate hash marks and labels them for every 15 feet
     for i in range(5):
@@ -113,9 +129,11 @@ while run:
     pygame.draw.line(screen, 'black', (x2, y2), (x3, y3), 3)
 
     for point in points:
-        transformed_point = (point[0] * screen_width / FIELD_LENGTH, point[1] * screen_height / FIELD_WIDTH)
-        print(transformed_point)
-        pygame.draw.circle(screen, 'red', transformed_point, 5)
+        print('Point before transformation: ' + str(point))
+        transformed_point = (point[0] * SCREEN_WIDTH / FIELD_LENGTH, point[1] * SCREEN_HEIGHT / FIELD_WIDTH)
+        print('Point after transformation: ' + str(transformed_point))
+        pygame.draw.circle(screen, 'yellow', transformed_point, 10)
+        pygame.draw.circle(screen, 'black', transformed_point, 10, width=1)
 
     # Write magnitude and angle from rectangle to QB
     magX = x3-x2
