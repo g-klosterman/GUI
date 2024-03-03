@@ -26,7 +26,7 @@ class ScanGUI:
     SCALE_X = SCREEN_WIDTH / FIELD_LENGTH
     SCALE_Y = SCREEN_HEIGHT / FIELD_WIDTH
 
-    TEXT_FONT = pygame.font.SysFont('Arial', 30)  # AAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHH
+
 
     def __init__(self):
         self.cam_client = CameraClient(ScanGUI.HOST, ScanGUI.PORT)
@@ -36,12 +36,16 @@ class ScanGUI:
         pygame.init()
         self.screen = pygame.display.set_mode((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT))
         pygame.display.set_caption('Scan & Score')
+
+        ScanGUI.TEXT_FONT = pygame.font.SysFont('Arial', 30)  # AAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHH
         self.clock = pygame.time.Clock()
 
         # Robots
         self.QB = None
         self.WR1 = None
         self.WR2 = None
+
+        self.reset_field()
 
     def reset_field(self):
         # Setting size and initial position of drawn rects to represent bots
@@ -63,6 +67,7 @@ class ScanGUI:
         run = True
         while run:
 
+            points = []
             # Receive the points representing detected bots from the camera server
             points = self.cam_client.receive_points()
 
