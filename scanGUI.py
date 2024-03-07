@@ -3,6 +3,9 @@ import sys, math, random
 from cameraClient import CameraClient
 from inputbox import InputBox # Do not delete, will need this later
 
+# If set to True, will not attempt to connect to the server to get real-time bot locations
+TEST = True
+
 
 # Generate a random RGB color
 def random_color():
@@ -26,15 +29,15 @@ class ScanGUI:
     SCALE_X = SCREEN_WIDTH / FIELD_LENGTH
     SCALE_Y = SCREEN_HEIGHT / FIELD_WIDTH
 
-
-
     def __init__(self):
+        if TEST:
+            ScanGUI.HOST = 'localhost'
         self.cam_client = CameraClient(ScanGUI.HOST, ScanGUI.PORT)
 
         # Set the screen size and name for the application
 
         pygame.init()
-        self.screen = pygame.display.set_mode((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT))
+        self.screen = pygame.display.set_mode((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), pygame.RESIZABLE)
         pygame.display.set_caption('Scan & Score')
 
         ScanGUI.TEXT_FONT = pygame.font.SysFont('Arial', 30)  # AAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHH
@@ -67,9 +70,10 @@ class ScanGUI:
         run = True
         while run:
 
-            points = []
             # Receive the points representing detected bots from the camera server
             points = self.cam_client.receive_points()
+
+            pygame.display.get_window_size()
 
             # Fill the screen with a green box and outline it with black and white lines
             self.screen.fill((55, 155, 90))
