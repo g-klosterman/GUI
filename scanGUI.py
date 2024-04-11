@@ -1,15 +1,15 @@
 import pygame
 import sys, math, random
 from cameraClient import CameraClient
-from inputbox import InputBox # Do not delete, will need this later
+from inputbox import InputBox   # Do not delete, will need this later
 
-# If set to True, will not attempt to connect to the server to get real-time bot locations
-TEST = True
+# If set to True, will attempt to connect to localhost instead of external camera system
+TEST = False
 
 
 # Generate a random RGB color
 def random_color():
-    levels = range(32, 256, 32) # Possible levels for each color are form 32 to 256 in increments of 32
+    levels = range(32, 256, 32)     # Possible levels for each color are form 32 to 256 in increments of 32
     return tuple(random.choice(levels) for _ in range(3))
 
 
@@ -56,6 +56,9 @@ class ScanGUI:
         self.WR1 = pygame.rect.Rect(300, 200, 51, 51)
         self.WR2 = pygame.rect.Rect(300, 500, 51, 51)
 
+    def startup(self):
+        input1 = InputBox()
+
     def draw_text(self, text, font, text_col, x, y):
         # Function for text to be added on screen as an image
         img = font.render(text, True, text_col)
@@ -72,6 +75,7 @@ class ScanGUI:
 
             # Receive the points representing detected bots from the camera server
             points = self.cam_client.receive_points()
+
 
             pygame.display.get_window_size()
 
@@ -119,32 +123,34 @@ class ScanGUI:
                         rectangle.x = mouse_x + offset_x
                         rectangle.y = mouse_y + offset_y
 
-            # Write cursor position
-            x1, y1 = pygame.mouse.get_pos()
-            # draw_text('(' + str(x1) + ", " + str(y1) + ')', TEXT_FONT, ('white'), 1250, 50)
-            # Writes square position from center of shape
-            x2, y2 = rectangle.x + 25, rectangle.y + 25
-            # draw_text('(' + str(x2) + ", " + str(y2) + ')', TEXT_FONT, ('white'), 1250, 100)
-            # Write position of QB from center of shape
-            x3, y3 = self.QB.x + 25, self.QB.y + 25
-            # draw_text('(' + str(x3) + ", " + str(y3) + ')', TEXT_FONT, ('white'), 1250, 150)
-
-            # draw line from center of rectangle to center of QB
-            pygame.draw.line(self.screen, 'black', (x2, y2), (x3, y3), 3)
 
             for point in points:
                 print('Point before transformation: ' + str(point))
-                transformed_point = (point[0] * ScanGUI.SCALE_X, point[1] * ScanGUI.SCALE_Y)
+                transformed_point = (point[0] * ScanGUI.SCALE_X, ScanGUI.SCREEN_HEIGHT - point[1] * ScanGUI.SCALE_Y)
                 print('Point after transformation: ' + str(transformed_point))
                 pygame.draw.circle(self.screen, 'yellow', transformed_point, 10)
                 pygame.draw.circle(self.screen, 'black', transformed_point, 10, width=1)
 
+                # Write cursor position
+                x1, y1 = pygame.mouse.get_pos()
+                # draw_text('(' + str(x1) + ", " + str(y1) + ')', TEXT_FONT, ('white'), 1250, 50)
+                # Writes square position from center of shape
+                x2, y2 = transformed_point[0], transformed_point[1]
+                # draw_text('(' + str(x2) + ", " + str(y2) + ')', TEXT_FONT, ('white'), 1250, 100)
+                # Write position of QB from center of shape
+                x3, y3 = self.QB.x + 25, self.QB.y + 25
+                # draw_text('(' + str(x3) + ", " + str(y3) + ')', TEXT_FONT, ('white'), 1250, 150)
+
+                # draw line from center of rectangle to center of QB
+                pygame.draw.line(self.screen, 'black', (x2, y2), (x3, y3), 3)
+
             # Write magnitude and angle from rectangle to QB
-            magX = x3-x2
-            magY = y3-y2
-            mag1 = math.sqrt((magX * magX) + (magY * magY))
-            theta1 = '%.2f' % (math.degrees(math.atan2(magY, magX)) % 360)
-            self.draw_text('(' + str(mag1) + ", " + str(theta1) + ')', ScanGUI.TEXT_FONT, 'white', 1250, 50)
+            #magX = x3-x2
+            #magY = y3-y2
+            #mag1 = math.sqrt((magX * magX) + (magY * magY))
+            #theta1 = '%.2f' % (math.degrees(math.atan2(magY, magX)) % 360)
+            if len(points) > 0:
+                self.draw_text('(' + str(points[0][0]) + ", " + str(points[0][1]) + ')', ScanGUI.TEXT_FONT, 'black', 720, 640)
 
             # Convert  coordinate position to feet
             # feet = '%.2f' % (mag1 / 15.5)
