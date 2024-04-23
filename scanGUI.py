@@ -55,8 +55,8 @@ class ScanGUI:
     def reset_field(self):
         # Setting size and initial position of drawn rects to represent bots
         self.QB = pygame.rect.Rect(1000, 360, 51, 51)
-        self.WR1 = pygame.rect.Rect(300, 200, 51, 51)
-        self.WR2 = pygame.rect.Rect(300, 500, 51, 51)
+        #self.WR1 = pygame.rect.Rect(300, 200, 51, 51)
+        #self.WR2 = pygame.rect.Rect(300, 500, 51, 51)
 
     def startup(self):
         input1 = InputBox()
@@ -120,9 +120,9 @@ class ScanGUI:
 
             # Draw squares on screen to represent robots
             pygame.draw.rect(self.screen, 'blue', self.QB)
-            pygame.draw.rect(self.screen, 'red', self.WR1)
-            pygame.draw.rect(self.screen, 'yellow', self.WR2)
-            pygame.draw.rect(self.screen, 'purple', rectangle)
+            #pygame.draw.rect(self.screen, 'red', self.WR1)
+            #pygame.draw.rect(self.screen, 'yellow', self.WR2)
+            #pygame.draw.rect(self.screen, 'purple', rectangle)
 
             # Event for dragging purple square on screen
             for event in pygame.event.get():

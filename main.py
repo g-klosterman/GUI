@@ -3,7 +3,7 @@ import datetime, cv2, os
 
 
 # If set to True, will attempt to connect to localhost instead of external camera system
-TEST = True
+TEST = False
 SAVE_FRAME_RATE = 4     # Frame rate to save animated frames for later viewing. Will not save if set to 0 or negative.
 
 
