@@ -1,10 +1,7 @@
 import pygame
-import sys, math, random
+import sys, math, random, time, os, shutil
 from cameraClient import CameraClient
 from inputbox import InputBox   # Do not delete, will need this later
-
-# If set to True, will attempt to connect to localhost instead of external camera system
-TEST = False
 
 
 # Generate a random RGB color
@@ -29,13 +26,12 @@ class ScanGUI:
     SCALE_X = SCREEN_WIDTH / FIELD_LENGTH
     SCALE_Y = SCREEN_HEIGHT / FIELD_WIDTH
 
-    def __init__(self):
-        if TEST:
+    def __init__(self, test, save_frame_rate, session_name):
+        if test:
             ScanGUI.HOST = 'localhost'
         self.cam_client = CameraClient(ScanGUI.HOST, ScanGUI.PORT)
 
         # Set the screen size and name for the application
-
         pygame.init()
         self.screen = pygame.display.set_mode((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), pygame.RESIZABLE)
         pygame.display.set_caption('Scan & Score')
@@ -48,7 +44,13 @@ class ScanGUI:
         self.WR1 = None
         self.WR2 = None
 
+        self.save_frame_rate = save_frame_rate
+        self.session_name = session_name
+
         self.reset_field()
+
+        self.draw_text('Waiting for server...', ScanGUI.TEXT_FONT, 'white', self.screen.get_width() / 2, self.screen.get_height() / 2)
+        pygame.display.flip()
 
     def reset_field(self):
         # Setting size and initial position of drawn rects to represent bots
@@ -59,23 +61,46 @@ class ScanGUI:
     def startup(self):
         input1 = InputBox()
 
+    def shutdown(self):
+        pygame.quit()
+        self.cam_client.close()
+
     def draw_text(self, text, font, text_col, x, y):
         # Function for text to be added on screen as an image
         img = font.render(text, True, text_col)
         self.screen.blit(img, (x, y))
 
     def run(self):
+        try:
+            self.cam_client.connect()
+        except ConnectionRefusedError as e:
+            raise e
 
         # Rect used for testing dragging and calculations of magnitude and angle
         rectangle = pygame.rect.Rect(0, 0, 51, 51)
         rectangle_dragging = False
+
+        # Determine whether to record the session based on the given frame rate
+        record = False
+        frame_interval = math.inf
+        if self.save_frame_rate > 0:
+            frame_interval = 1 / self.save_frame_rate
+            record = True
+
+            # If the application needs to record, make an empty folder in which to save images
+            if os.path.exists(self.session_name):
+                shutil.rmtree(self.session_name)
+            os.makedirs(self.session_name)
+
+        # Get the start time of the session
+        start = time.time()
+        mark = start
 
         run = True
         while run:
 
             # Receive the points representing detected bots from the camera server
             points = self.cam_client.receive_points()
-
 
             pygame.display.get_window_size()
 
@@ -123,7 +148,6 @@ class ScanGUI:
                         rectangle.x = mouse_x + offset_x
                         rectangle.y = mouse_y + offset_y
 
-
             for point in points:
                 print('Point before transformation: ' + str(point))
                 transformed_point = (point[0] * ScanGUI.SCALE_X, ScanGUI.SCREEN_HEIGHT - point[1] * ScanGUI.SCALE_Y)
@@ -145,20 +169,17 @@ class ScanGUI:
                 pygame.draw.line(self.screen, 'black', (x2, y2), (x3, y3), 3)
 
             # Write magnitude and angle from rectangle to QB
-            #magX = x3-x2
-            #magY = y3-y2
-            #mag1 = math.sqrt((magX * magX) + (magY * magY))
-            #theta1 = '%.2f' % (math.degrees(math.atan2(magY, magX)) % 360)
             if len(points) > 0:
                 self.draw_text('(' + str(points[0][0]) + ", " + str(points[0][1]) + ')', ScanGUI.TEXT_FONT, 'black', 720, 640)
 
-            # Convert  coordinate position to feet
-            # feet = '%.2f' % (mag1 / 15.5)
-            # draw_text('(' + str(feet) + ", " + str(theta1) + ')', TEXT_FONT, ('white'), 1250, 100)
-
             self.clock.tick(ScanGUI.FPS)
 
-            pygame.display.flip()
+            if record:
+                # If the current time exceeds the time at which the next frame should be captured, save the current frame
+                now = time.time()
+                if now - mark >= 0:
+                    mark = mark + frame_interval
 
-        pygame.quit()
-        self.cam_client.close()
+                    pygame.image.save(self.screen, self.session_name + '/' + str(now) + '.jpg')
+
+            pygame.display.flip()

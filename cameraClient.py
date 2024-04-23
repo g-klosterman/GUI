@@ -11,10 +11,16 @@ class CameraClient:
         self.port = port
 
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # SOCK_STREAM defines a TCP socket as opposed to UDP
-        self.conn.connect((self.host, self.port))
 
-        response = 'OK'
-        self.conn.send(response.encode())
+    def connect(self):
+        try:
+            self.conn.connect((self.host, self.port))
+
+            response = 'OK'
+            self.conn.send(response.encode())
+        except ConnectionRefusedError as e:
+            raise e
+
 
     def receive_points(self):
 
