@@ -1,84 +1,141 @@
+import math
+import os
+import shutil
+import sys
+import time
+
 import pygame
-import sys, math, random, time, os, shutil
+
 from cameraClient import CameraClient
-from inputbox import InputBox   # Do not delete, will need this later
-
-
-# Generate a random RGB color
-def random_color():
-    levels = range(32, 256, 32)     # Possible levels for each color are form 32 to 256 in increments of 32
-    return tuple(random.choice(levels) for _ in range(3))
+from inputbox import InputBox
 
 
 class ScanGUI:
+    """
+    ScanGUI class
+
+    Handles the graphical user interface for the sideline display component of the Scan and Score capstone project.
+
+
+    Requires Bonjour Print Services to be installed to resolve the domain name overheadcam. If Bonjour Print Services
+    cannot be installed, set use_ip to True when initializing an object of this class.
+    """
 
     # Server session constants
     HOST = 'overheadcam'
+    ALTERNATE_HOST = '192.168.0.1'
+    TEST_HOST = 'localhost'
     PORT = 5000
 
     # Rendering constants
     FPS = 60
-    SCREEN_WIDTH = 1440
-    SCREEN_HEIGHT = 720
+    SCREEN_WIDTH = 1000
+    SCREEN_HEIGHT = 500
     FIELD_LENGTH = 90   # Represented as the vertical axis on display, parallel to SCREEN_WIDTH
     FIELD_WIDTH = 46    # Represented as the vertical axis on display, parallel to SCREEN_HEIGHT
 
     SCALE_X = SCREEN_WIDTH / FIELD_LENGTH
     SCALE_Y = SCREEN_HEIGHT / FIELD_WIDTH
 
-    def __init__(self, test, save_frame_rate, session_name):
+    TEXT_FONT = None
+
+    def __init__(self, test, save_frame_rate, session_name, use_ip=False):
+        """
+        Initialize a session of the GUI client. Set test to True to connect to a server at localhost or False to connect
+        to the server running on a separately connected camera device.
+
+        :param test:                Boolean indicator of whether this GUI session is a test
+        :param save_frame_rate:     The target frame rate to save the recorded video
+        :param session_name:        The name of the GUI session, to be used as a filename for recorded game footage
+        :param use_ip:              (Optional) Use the IP address of the server instead of its hostname
+        """
+
+        # Configure the TCP client to talk to the 2D camera server
+        self.server = ScanGUI.HOST
         if test:
-            ScanGUI.HOST = 'localhost'
-        self.cam_client = CameraClient(ScanGUI.HOST, ScanGUI.PORT)
+            self.server = ScanGUI.TEST_HOST
+        if use_ip:
+            self.server = ScanGUI.ALTERNATE_HOST
+
+        self.cam_client = CameraClient(self.server, ScanGUI.PORT)
 
         # Set the screen size and name for the application
         pygame.init()
         self.screen = pygame.display.set_mode((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), pygame.RESIZABLE)
+        self.field = None
         pygame.display.set_caption('Scan & Score')
 
-        ScanGUI.TEXT_FONT = pygame.font.SysFont('Arial', 30)  # AAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHH
+        ScanGUI.TEXT_FONT = pygame.font.SysFont('Arial', 20)  # AAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHH
         self.clock = pygame.time.Clock()
 
-        # Robots
-        self.QB = None
-        self.WR1 = None
-        self.WR2 = None
+        # Assets on the field
+        self.cursor = None
 
         self.save_frame_rate = save_frame_rate
+        self.avg_frame_interval = math.inf
         self.session_name = session_name
 
         self.reset_field()
 
-        self.draw_text('Waiting for server...', ScanGUI.TEXT_FONT, 'white', self.screen.get_width() / 2, self.screen.get_height() / 2)
+        self.draw_text_center(self.field, 'Waiting for server...', 'black', self.screen.get_width() / 2, self.screen.get_height() / 2)
+        pygame.transform.scale(self.field, self.screen.get_size(), self.screen)
         pygame.display.flip()
 
     def reset_field(self):
         # Setting size and initial position of drawn rects to represent bots
-        self.QB = pygame.rect.Rect(1000, 360, 51, 51)
-        #self.WR1 = pygame.rect.Rect(300, 200, 51, 51)
-        #self.WR2 = pygame.rect.Rect(300, 500, 51, 51)
+        self.cursor = pygame.rect.Rect(ScanGUI.SCREEN_WIDTH / 2, ScanGUI.SCREEN_HEIGHT / 2, ScanGUI.SCREEN_HEIGHT / 20, ScanGUI.SCREEN_HEIGHT/ 20)
+        self.field = pygame.Surface((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT))
+
+        # Fill the screen with a green box and outline it with black and white lines
+        self.field.fill((55, 155, 90))
+
+        # Create vertical lines every 15 feet
+        line_spacing = 15
+        line_location = 0
+        for i in range(int(ScanGUI.FIELD_LENGTH / line_spacing) - 1):
+            line_location += line_spacing * ScanGUI.SCALE_X
+            pygame.draw.line(self.field, 'white', (line_location, 0), (line_location, ScanGUI.SCREEN_HEIGHT),
+                             width=20)
+            self.draw_text(self.field, str(line_spacing * (i + 1)) + "'", 'black', line_location - ScanGUI.SCREEN_WIDTH / 50, 0.1 * ScanGUI.SCREEN_HEIGHT)
+            self.draw_text(self.field, str(line_spacing * (i + 1)) + "'", 'black', ScanGUI.SCREEN_WIDTH * 49 / 50 - line_location, 0.9 * ScanGUI.SCREEN_HEIGHT)
+
+        # Outline the field with white and black lines
+        pygame.draw.rect(self.field, 'white', (0, 0, ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), width=20)
+        pygame.draw.rect(self.field, 'black', (0, 0, ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), width=5)
+        return
 
     def startup(self):
         input1 = InputBox()
+        return
+
+    def get_avg_frame_rate(self):
+        return 1 / self.avg_frame_interval
 
     def shutdown(self):
         pygame.quit()
         self.cam_client.close()
 
-    def draw_text(self, text, font, text_col, x, y):
+    @staticmethod
+    def draw_text(surf, text, text_col, x, y):
         # Function for text to be added on screen as an image
-        img = font.render(text, True, text_col)
-        self.screen.blit(img, (x, y))
+        img = ScanGUI.TEXT_FONT.render(text, True, text_col)
+        surf.blit(img, (x, y))
 
-    def run(self):
-        try:
-            self.cam_client.connect()
-        except ConnectionRefusedError as e:
-            raise e
+    @staticmethod
+    def draw_text_center(surf, text, text_col, x, y):
 
-        # Rect used for testing dragging and calculations of magnitude and angle
-        rectangle = pygame.rect.Rect(0, 0, 51, 51)
-        rectangle_dragging = False
+        img = ScanGUI.TEXT_FONT.render(text, True, text_col)
+
+        new_x = x - img.get_width() / 2
+        new_y = y - img.get_height() / 2
+        surf.blit(img, (new_x, new_y))
+
+    def run(self, connect_attempt_limit=1):
+
+        self.reset_field()
+
+        num_frames_saved = 0
+        cumulative_frame_overshoot = 0
 
         # Determine whether to record the session based on the given frame rate
         record = False
@@ -87,99 +144,132 @@ class ScanGUI:
             frame_interval = 1 / self.save_frame_rate
             record = True
 
-            # If the application needs to record, make an empty folder in which to save images
+            # If the application is going to record, it needs a folder in which to save recorded frames
+            # To be safe, first check if the desired folder already exists
             if os.path.exists(self.session_name):
+
+                # Delete the folder and all of its contents
                 shutil.rmtree(self.session_name)
+
+            # Make the folder using the provided session name
             os.makedirs(self.session_name)
 
         # Get the start time of the session
         start = time.time()
         mark = start
 
+        cursor_dragging = False
+        offset_x = offset_y = 0
+
         run = True
+        connected = False
         while run:
 
+            # Attempt to connect to the camera server
+            if not connected:
+                try:
+                    self.cam_client.connect()
+                    connected = True
+                    self.reset_field()
+                # Handle the error that is raised when the server doesn't accept the connection
+                except ConnectionRefusedError as e:
+
+                    # Update the number of attempts left until the client gives up on making the connection
+                    connect_attempt_limit -= 1
+
+                    self.reset_field()
+                    self.draw_text_center(self.field, 'Waiting for server. Number of attempts left: ' +
+                                          str(connect_attempt_limit), 'black', self.screen.get_width() / 2,
+                                          self.screen.get_height() / 2)
+
+                    if connect_attempt_limit < 1:
+                        break
+
+            mat = self.field.copy()
+
             # Receive the points representing detected bots from the camera server
-            points = self.cam_client.receive_points()
+            points = []
 
-            pygame.display.get_window_size()
+            if connected:
+                points = self.cam_client.receive_points()
 
-            # Fill the screen with a green box and outline it with black and white lines
-            self.screen.fill((55, 155, 90))
-            pygame.draw.rect(self.screen, 'white', (0, 0, ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), width=20)
-            pygame.draw.rect(self.screen, 'black', (0, 0, ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), width=5)
+            # Draw the cursor on the screen as a rectangle
+            pygame.draw.rect(mat, 'blue', self.cursor)
 
-            # Create vertical lines every 15 feet
-            line_spacing = 15
-            line_location = 0
-            for i in range(5):
-                line_location += line_spacing * ScanGUI.SCALE_X
-                pygame.draw.line(self.screen, 'white', (line_location, 5), (line_location, ScanGUI.SCREEN_HEIGHT - 5), width=20)
-                self.draw_text(str(line_spacing * (i + 1)) + "'", ScanGUI.TEXT_FONT, 'black', line_location - 42, 20)
-                self.draw_text(str(line_spacing * (i + 1)) + "'", ScanGUI.TEXT_FONT, 'black', 1398 - line_location, 665)
-
-            # Draw squares on screen to represent robots
-            pygame.draw.rect(self.screen, 'blue', self.QB)
-            #pygame.draw.rect(self.screen, 'red', self.WR1)
-            #pygame.draw.rect(self.screen, 'yellow', self.WR2)
-            #pygame.draw.rect(self.screen, 'purple', rectangle)
-
-            # Event for dragging purple square on screen
+            # Handle input events
             for event in pygame.event.get():
+
+                # Exit the application upon clicking the OS's default app close button
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
 
+                # Handle the clicking and dragging of the cursor
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if rectangle.collidepoint(event.pos):
-                            rectangle_dragging = True
+                        if self.cursor.collidepoint(event.pos):
+                            cursor_dragging = True
                             mouse_x, mouse_y = event.pos
-                            offset_x = rectangle.x - mouse_x
-                            offset_y = rectangle.y - mouse_y
+                            offset_x = self.cursor.x - mouse_x
+                            offset_y = self.cursor.y - mouse_y
 
+                # Handle the release of the left mouse button, stopping the dragging of the cursor
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
-                        rectangle_dragging = False
+                        cursor_dragging = False
 
                 elif event.type == pygame.MOUSEMOTION:
-                    if rectangle_dragging:
+                    if cursor_dragging:
                         mouse_x, mouse_y = event.pos
-                        rectangle.x = mouse_x + offset_x
-                        rectangle.y = mouse_y + offset_y
+                        self.cursor.x = mouse_x + offset_x
+                        self.cursor.y = mouse_y + offset_y
 
             for point in points:
                 print('Point before transformation: ' + str(point))
                 transformed_point = (point[0] * ScanGUI.SCALE_X, ScanGUI.SCREEN_HEIGHT - point[1] * ScanGUI.SCALE_Y)
                 print('Point after transformation: ' + str(transformed_point))
-                pygame.draw.circle(self.screen, 'yellow', transformed_point, 10)
-                pygame.draw.circle(self.screen, 'black', transformed_point, 10, width=1)
+                pygame.draw.circle(mat, 'orange', transformed_point, 10)
+                self.draw_text(mat, 'WR', 'black', transformed_point[0], transformed_point[1])
+                pygame.draw.circle(mat, 'black', transformed_point, 10, width=1)
 
-                # Write cursor position
-                x1, y1 = pygame.mouse.get_pos()
-                # draw_text('(' + str(x1) + ", " + str(y1) + ')', TEXT_FONT, ('white'), 1250, 50)
-                # Writes square position from center of shape
-                x2, y2 = transformed_point[0], transformed_point[1]
-                # draw_text('(' + str(x2) + ", " + str(y2) + ')', TEXT_FONT, ('white'), 1250, 100)
-                # Write position of QB from center of shape
-                x3, y3 = self.QB.x + 25, self.QB.y + 25
-                # draw_text('(' + str(x3) + ", " + str(y3) + ')', TEXT_FONT, ('white'), 1250, 150)
+                cursor_x = self.cursor.x - self.cursor.width / 2
+                cursor_y = self.cursor.y + self.cursor.height / 2
 
                 # draw line from center of rectangle to center of QB
-                pygame.draw.line(self.screen, 'black', (x2, y2), (x3, y3), 3)
+                pygame.draw.line(mat, 'black', transformed_point, (cursor_x, cursor_y), 3)
 
-            # Write magnitude and angle from rectangle to QB
+            # Write magnitude and angle from the cursor to each of the bots
             if len(points) > 0:
-                self.draw_text('(' + str(points[0][0]) + ", " + str(points[0][1]) + ')', ScanGUI.TEXT_FONT, 'black', 720, 640)
+                self.draw_text(mat, '(' + str(points[0][0]) + ", " + str(points[0][1]) + ')', 'black', 720, 400)
+
+
+
+            pygame.transform.scale(mat, self.screen.get_size(), self.screen)
 
             self.clock.tick(ScanGUI.FPS)
+            pygame.display.flip()
 
-            if record:
+
+            # Recording things
+            if record and connected:
+
                 # If the current time exceeds the time at which the next frame should be captured, save the current frame
                 now = time.time()
-                if now - mark >= 0:
-                    mark = mark + frame_interval
+                if now > mark:
+                    # It is not guaranteed that the frame will be saved at the exact time it was supposed to
+                    # Save the time overshoot cumulatively so it may be used to correct the video frame rate during the
+                    # render stage
+                    cumulative_frame_overshoot += now - mark
+                    mark = now + frame_interval
 
-                    pygame.image.save(self.screen, self.session_name + '/' + str(now) + '.jpg')
+                    pygame.image.save(mat, self.session_name + '/' + str(now) + '.jpg')
+                    num_frames_saved += 1
 
-            pygame.display.flip()
+                avg_frame_rate = self.save_frame_rate
+
+                # Calculate the average actual framerate of the recorded video frames
+                if num_frames_saved > 0:
+                    avg_frame_overshoot = cumulative_frame_overshoot / num_frames_saved
+                    self.avg_frame_interval = frame_interval + avg_frame_overshoot
+
+        return connected
