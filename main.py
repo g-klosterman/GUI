@@ -6,8 +6,8 @@ import shutil
 from scanGUI import ScanGUI
 
 # If set to True, will attempt to connect to localhost instead of external camera system
-TEST = False
-SAVE_FRAME_RATE = 4     # Frame rate to save animated frames for later viewing. Will not save if set to 0 or negative.
+TEST = True
+SAVE_FRAME_RATE = 0     # Frame rate to save animated frames for later viewing. Will not save if set to 0 or negative.
 
 
 def makeVideo(file_name, image_folder, frame_rate):
@@ -40,7 +40,9 @@ def main():
         session_name = 'animation_' + datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
 
         actual_frame_rate = 0
+        session_success = False
         gui = ScanGUI(test=TEST, save_frame_rate=SAVE_FRAME_RATE, session_name=session_name)
+        
         try:
             session_success = gui.run(connect_attempt_limit=10)
         except ConnectionRefusedError as e:
@@ -55,12 +57,12 @@ def main():
             run = False
 
         # Compile the recorded frames into a video
-        # if session_success:
-        #     print('Compiling video, please wait...')
-        #     makeVideo(file_name=session_name, image_folder=session_name, frame_rate=gui.get_avg_frame_rate())
+        if session_success:
+            print('Compiling video, please wait...')
+            makeVideo(file_name=session_name, image_folder=session_name, frame_rate=gui.get_avg_frame_rate())
         # If the session failed to connect, delete the frames that were saved and the folder containing them
-        # elif os.path.exists(session_name):
-        #     shutil.rmtree(session_name)
+        elif os.path.exists(session_name):
+            shutil.rmtree(session_name)
 
 
 if __name__ == '__main__':

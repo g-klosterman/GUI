@@ -3,21 +3,31 @@ import ast, socket
 
 class CameraClient:
 
+    # Server session constants
+    _DEFAULT_HOST = 'overheadcam'
+    _ALTERNATE_HOST = '192.168.0.1'
+    _TEST_HOST = 'localhost'
+    _PORT = 5000
+
     # Default packet length. Must be the same in the client and server.
     PACKET_LENGTH = 1024
 
-    def __init__(self, host, port):
+    def __init__(self, test, use_ip):
         """
         Configure the client for the overhead camera.
-        :param host:    The hostname or IP address of the camera server
-        :param port:    The port the camera server is listening on
         """
 
-        self.host = host
-        self.port = port
+        # Configure the TCP connection settings
+        self._host = self._DEFAULT_HOST
+        if test:
+            self._host = self._TEST_HOST
+        elif use_ip:
+            self._host = self._ALTERNATE_HOST
+
+        self._port = self._PORT
 
         # Open a TCP socket to make the connection
-        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def connect(self):
         """
@@ -26,10 +36,10 @@ class CameraClient:
         """
 
         try:
-            self.conn.connect((self.host, self.port))
+            self._conn.connect((self._host, self._port))
 
             response = 'OK'
-            self.conn.send(response.encode())
+            self._conn.send(response.encode())
         except ConnectionRefusedError as e:
             raise e
 
@@ -43,7 +53,7 @@ class CameraClient:
         """
 
         # Receive the first message in a TCP transmission from the server
-        data = self.conn.recv(CameraClient.PACKET_LENGTH).decode()
+        data = self._conn.recv(CameraClient.PACKET_LENGTH).decode()
 
         # Decode and receive each message in the transmission until an End of Transmission message is sent
         points = []
@@ -56,18 +66,19 @@ class CameraClient:
             try:
                 points += ast.literal_eval(data)
 
-            # If the received message is not decoded properly, change the response to let the server know there is an error
+            # If the received message is not decoded properly,
+            # change the response to let the server know there is an error
             except:
                 response = 'BAD'
 
             # Send the response to the server
-            self.conn.send(response.encode())
+            self._conn.send(response.encode())
 
             # Get the next message in the transmission
-            data = self.conn.recv(CameraClient.PACKET_LENGTH).decode()
+            data = self._conn.recv(CameraClient.PACKET_LENGTH).decode()
 
         # Send a final OK to let the server know the EOT was received
-        self.conn.send('OK'.encode())
+        self._conn.send('OK'.encode())
 
         return points
 
@@ -77,4 +88,4 @@ class CameraClient:
         This method should always be called if connect() has previously been called to close the TCP sockets in the
         client and server.
         """
-        self.conn.close()
+        self._conn.close()

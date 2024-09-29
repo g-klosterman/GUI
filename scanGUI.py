@@ -6,8 +6,10 @@ import time
 
 import pygame
 
+from UIElement import UIElement
 from cameraClient import CameraClient
-from inputbox import InputBox
+from inputBox import InputBox
+from checkBox import CheckBox
 
 
 class ScanGUI:
@@ -20,12 +22,6 @@ class ScanGUI:
     Requires Bonjour Print Services to be installed to resolve the domain name overheadcam. If Bonjour Print Services
     cannot be installed, set use_ip to True when initializing an object of this class.
     """
-
-    # Server session constants
-    HOST = 'overheadcam'
-    ALTERNATE_HOST = '192.168.0.1'
-    TEST_HOST = 'localhost'
-    PORT = 5000
 
     # Rendering constants
     FPS = 60
@@ -50,30 +46,29 @@ class ScanGUI:
         :param use_ip:              (Optional) Use the IP address of the server instead of its hostname
         """
 
-        # Configure the TCP client to talk to the 2D camera server
-        self.server = ScanGUI.HOST
-        if test:
-            self.server = ScanGUI.TEST_HOST
-        if use_ip:
-            self.server = ScanGUI.ALTERNATE_HOST
-
-        self.cam_client = CameraClient(self.server, ScanGUI.PORT)
+        self.cam_client = CameraClient(test, use_ip)
 
         # Set the screen size and name for the application
         pygame.init()
         self.screen = pygame.display.set_mode((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), pygame.RESIZABLE)
-        self.field = None
+        self.field = pygame.Surface((ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT))
         pygame.display.set_caption('Scan & Score')
 
         ScanGUI.TEXT_FONT = pygame.font.SysFont('Arial', 20)  # AAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHH
         self.clock = pygame.time.Clock()
 
-        # Assets on the field
+        # Interactable assets
         self.cursor = None
 
+        # Lists to keep track of UI elements that may be interacted with in certain ways
+        self.ui_elements = []
+        self.active_ui_element = None
+
+        # Recording parameters
         self.save_frame_rate = save_frame_rate
         self.avg_frame_interval = math.inf
         self.session_name = session_name
+
 
         self.reset_field()
 
@@ -104,8 +99,121 @@ class ScanGUI:
         pygame.draw.rect(self.field, 'black', (0, 0, ScanGUI.SCREEN_WIDTH, ScanGUI.SCREEN_HEIGHT), width=5)
         return
 
+    def focus(self, ui_element):
+        if ui_element is None:
+
+            # Defocus the focused UI element
+            if self.active_ui_element is not None:
+                self.active_ui_element.defocus()
+            self.active_ui_element = None
+
+        else:
+
+            # If the previously focused element is not the current one, defocus it
+            if self.active_ui_element is not None and self.active_ui_element != ui_element:
+                self.active_ui_element.defocus()
+            self.active_ui_element = ui_element
+            self.active_ui_element.focus()
+
+    def handle_event(self, event):
+        """
+        Handle a given input event.
+
+        :param event:   A pygame event
+        :return:
+        """
+
+        event_handled = False
+
+        # QUIT event occurs when the user clicks the X to close the app window
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+
+            # Let's just treat the list of clickable UI elements like a queue. I'm sure this'll run faster than O(n^2)
+            # (He doesn't know)
+            for i in range(len(self.ui_elements)):
+
+                # Get the head of the queue and immediately re-enqueue it at the tail
+                ui_element = self.ui_elements.pop(0)
+                self.ui_elements.append(ui_element)
+                print(self.ui_elements)
+
+                # If this is the element that was clicked, select it
+                if ui_element.rect.collidepoint(event.pos):
+
+                    # If the element can be focused, switch focus to it
+                    if ui_element.focusable:
+
+                        self.focus(ui_element)
+
+                    # Register the click
+                    self.active_ui_element.handle_click()
+                    event_handled = True
+
+                    # No need to keep checking elements after the clicked element has been found
+                    break
+
+            if not event_handled:
+                self.focus(None)
+
+        # Check if the event is a keyboard input and there is an active input box
+        elif event.type == pygame.KEYDOWN:
+
+            if self.active_ui_element is None:
+                return False
+
+            return_code = self.active_ui_element.handle_keypress(event)
+
+            if return_code == UIElement.ReturnCode.FOCUS_NEXT_ELEMENT:
+
+                # Select the next UI element
+                self.focus(self.ui_elements.pop(0))
+                self.ui_elements.append(self.active_ui_element)
+
+            elif return_code == UIElement.ReturnCode.DEFOCUS_ME:
+
+                self.focus(None)
+
+            if return_code != UIElement.ReturnCode.COULD_NOT_HANDLE:
+                event_handled = True
+
+        return event_handled
+
+
     def startup(self):
-        input1 = InputBox()
+        """
+
+        :return:
+        """
+
+        input1 = CheckBox((100, 0), (100, 50))
+        input2 = InputBox((100, 100), (100, 50))
+        #input2.placeholder = ''
+
+        self.ui_elements.extend([input1, input2])
+        print(self.ui_elements)
+
+        while True:
+
+            # Process events, which consist of user inputs
+            for event in pygame.event.get():
+
+                self.handle_event(event)
+
+            # Rendering
+            mat = self.field.copy()
+
+            for element in self.ui_elements:
+                element.draw_self(mat)
+
+            pygame.transform.scale(mat, self.screen.get_size(), self.screen)
+
+            self.clock.tick(ScanGUI.FPS)
+            pygame.display.flip()
+
         return
 
     def get_avg_frame_rate(self):
@@ -131,6 +239,10 @@ class ScanGUI:
         surf.blit(img, (new_x, new_y))
 
     def run(self, connect_attempt_limit=1):
+
+
+        # Render the startup screen
+        #self.startup()
 
         self.reset_field()
 
