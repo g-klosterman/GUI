@@ -6,10 +6,9 @@ import time
 
 import pygame
 
-from UIElement import UIElement
+from PycharmUI.UIElement import *
+from PycharmUI.robot import Robot
 from cameraClient import CameraClient
-from inputBox import InputBox
-from checkBox import CheckBox
 
 
 class ScanGUI:
@@ -24,7 +23,7 @@ class ScanGUI:
     """
 
     # Rendering constants
-    FPS = 60
+    SIM_FPS = 60
     SCREEN_WIDTH = 1000
     SCREEN_HEIGHT = 500
     FIELD_LENGTH = 90   # Represented as the vertical axis on display, parallel to SCREEN_WIDTH
@@ -35,18 +34,24 @@ class ScanGUI:
 
     TEXT_FONT = None
 
-    def __init__(self, test, save_frame_rate, session_name, use_ip=False):
+    pattern_assigments = {
+        'X': '322',
+        'Y': '98',
+        'STAIR': 'INFINITY'
+    }
+
+    def __init__(self, test, session_name, use_ip=False):
         """
         Initialize a session of the GUI client. Set test to True to connect to a server at localhost or False to connect
         to the server running on a separately connected camera device.
 
         :param test:                Boolean indicator of whether this GUI session is a test
-        :param save_frame_rate:     The target frame rate to save the recorded video
         :param session_name:        The name of the GUI session, to be used as a filename for recorded game footage
         :param use_ip:              (Optional) Use the IP address of the server instead of its hostname
         """
 
         self.cam_client = CameraClient(test, use_ip)
+        self.config = None
 
         # Set the screen size and name for the application
         pygame.init()
@@ -57,18 +62,14 @@ class ScanGUI:
         ScanGUI.TEXT_FONT = pygame.font.SysFont('Arial', 20)  # AAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHH
         self.clock = pygame.time.Clock()
 
-        # Interactable assets
-        self.cursor = None
-
-        # Lists to keep track of UI elements that may be interacted with in certain ways
+        # Keep track of UI elements that may be interacted with in certain ways
         self.ui_elements = []
         self.active_ui_element = None
 
         # Recording parameters
-        self.save_frame_rate = save_frame_rate
+        self.save_frame_rate = 0
         self.avg_frame_interval = math.inf
         self.session_name = session_name
-
 
         self.reset_field()
 
@@ -192,8 +193,9 @@ class ScanGUI:
         input1 = CheckBox((100, 0), (100, 50))
         input2 = InputBox((100, 100), (100, 50))
         #input2.placeholder = ''
+        robot = Robot((200, 200), (50, 50), 'receiver', '322')
 
-        self.ui_elements.extend([input1, input2])
+        self.ui_elements.extend([input1, input2, robot])
         print(self.ui_elements)
 
         while True:
@@ -211,7 +213,7 @@ class ScanGUI:
 
             pygame.transform.scale(mat, self.screen.get_size(), self.screen)
 
-            self.clock.tick(ScanGUI.FPS)
+            self.clock.tick(ScanGUI.SIM_FPS)
             pygame.display.flip()
 
         return
@@ -252,8 +254,11 @@ class ScanGUI:
         # Determine whether to record the session based on the given frame rate
         record = False
         frame_interval = math.inf
-        if self.save_frame_rate > 0:
-            frame_interval = 1 / self.save_frame_rate
+
+        frame_rate = 4#self.config['FPS']
+
+        if frame_rate > 0:
+            frame_interval = 1 / frame_rate
             record = True
 
             # If the application is going to record, it needs a folder in which to save recorded frames
@@ -280,7 +285,7 @@ class ScanGUI:
             # Attempt to connect to the camera server
             if not connected:
                 try:
-                    self.cam_client.connect()
+                    self.config = self.cam_client.connect()
                     connected = True
                     self.reset_field()
                 # Handle the error that is raised when the server doesn't accept the connection
@@ -300,10 +305,10 @@ class ScanGUI:
             mat = self.field.copy()
 
             # Receive the points representing detected bots from the camera server
-            points = []
+            bot_positions = []
 
             if connected:
-                points = self.cam_client.receive_points()
+                bot_positions = self.cam_client.receive_points()
 
             # Draw the cursor on the screen as a rectangle
             pygame.draw.rect(mat, 'blue', self.cursor)
@@ -336,13 +341,41 @@ class ScanGUI:
                         self.cursor.x = mouse_x + offset_x
                         self.cursor.y = mouse_y + offset_y
 
-            for point in points:
+            for bot_pattern in bot_positions:
+                bot_name = bot_pattern
+                if bot_pattern in self.pattern_assigments.keys():
+                    bot_name = self.pattern_assigments[bot_pattern]
+
+                bot_exists = False
+
+                point = bot_positions[bot_pattern]
+                if point is None:
+                    continue
+
+                if len(point) != 2:
+                    continue
+
                 print('Point before transformation: ' + str(point))
                 transformed_point = (point[0] * ScanGUI.SCALE_X, ScanGUI.SCREEN_HEIGHT - point[1] * ScanGUI.SCALE_Y)
                 print('Point after transformation: ' + str(transformed_point))
-                pygame.draw.circle(mat, 'orange', transformed_point, 10)
-                self.draw_text(mat, 'WR', 'black', transformed_point[0], transformed_point[1])
-                pygame.draw.circle(mat, 'black', transformed_point, 10, width=1)
+
+                # Check to see if the bot has already been instantiated in the simulation
+                for ui_element in self.ui_elements:
+                    if isinstance(ui_element, Robot):
+                        if ui_element.name == bot_name:
+                            bot = ui_element
+                            bot.rect.x, bot.rect.y = transformed_point
+
+                            bot_exists = True
+
+                # If the bot hasn't been instantiated, get on that
+                if not bot_exists:
+                    bot = Robot(transformed_point, (50, 50), 'receiver', bot_name)
+                    self.ui_elements.append(bot)
+
+                #pygame.draw.circle(mat, 'orange', transformed_point, 10)
+                #self.draw_text(mat, 'WR', 'black', transformed_point[0], transformed_point[1])
+                #pygame.draw.circle(mat, 'black', transformed_point, 10, width=1)
 
                 cursor_x = self.cursor.x - self.cursor.width / 2
                 cursor_y = self.cursor.y + self.cursor.height / 2
@@ -351,14 +384,15 @@ class ScanGUI:
                 pygame.draw.line(mat, 'black', transformed_point, (cursor_x, cursor_y), 3)
 
             # Write magnitude and angle from the cursor to each of the bots
-            if len(points) > 0:
-                self.draw_text(mat, '(' + str(points[0][0]) + ", " + str(points[0][1]) + ')', 'black', 720, 400)
+            '''if len(points) > 0:
+                self.draw_text(mat, '(' + str(points[0][0]) + ", " + str(points[0][1]) + ')', 'black', 720, 400)'''
 
-
+            for ui_element in self.ui_elements:
+                ui_element.draw_self(mat)
 
             pygame.transform.scale(mat, self.screen.get_size(), self.screen)
 
-            self.clock.tick(ScanGUI.FPS)
+            self.clock.tick(ScanGUI.SIM_FPS)
             pygame.display.flip()
 
 

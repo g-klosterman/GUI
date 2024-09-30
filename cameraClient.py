@@ -1,4 +1,4 @@
-import ast, socket
+import ast, socket, json
 
 
 class CameraClient:
@@ -10,7 +10,7 @@ class CameraClient:
     _PORT = 5000
 
     # Default packet length. Must be the same in the client and server.
-    PACKET_LENGTH = 1024
+    DEFAULT_PACKET_SIZE = 2048
 
     def __init__(self, test, use_ip):
         """
@@ -26,6 +26,8 @@ class CameraClient:
 
         self._port = self._PORT
 
+        self._packet_size = self.DEFAULT_PACKET_SIZE
+
         # Open a TCP socket to make the connection
         self._conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -35,13 +37,21 @@ class CameraClient:
         :return:        Passes a ConnectionRefusedError if the server refuses the connection
         """
 
+        config_dict = None
+
         try:
             self._conn.connect((self._host, self._port))
 
-            response = 'OK'
-            self._conn.send(response.encode())
+            # Receive and decode the config settings from the server
+            config_json = self._conn.recv(self.DEFAULT_PACKET_SIZE).decode()
+
+            config_dict = json.loads(config_json)
+            self._packet_size = config_dict['PACKET_SIZE']
+
         except ConnectionRefusedError as e:
             raise e
+
+        return config_dict
 
     def receive_points(self):
         """
@@ -53,9 +63,9 @@ class CameraClient:
         """
 
         # Receive the first message in a TCP transmission from the server
-        data = self._conn.recv(CameraClient.PACKET_LENGTH).decode()
+        data = self._conn.recv(self._packet_size).decode()
 
-        # Decode and receive each message in the transmission until an End of Transmission message is sent
+        '''# Decode and receive each message in the transmission until an End of Transmission message is sent
         points = []
         while data != 'EOT':
 
@@ -78,7 +88,10 @@ class CameraClient:
             data = self._conn.recv(CameraClient.PACKET_LENGTH).decode()
 
         # Send a final OK to let the server know the EOT was received
+        '''
         self._conn.send('OK'.encode())
+        points = json.loads(data)
+        print(points)
 
         return points
 

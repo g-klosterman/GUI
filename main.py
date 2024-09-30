@@ -39,9 +39,8 @@ def main():
         # Get a unique name for the recording of the session
         session_name = 'animation_' + datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
 
-        actual_frame_rate = 0
         session_success = False
-        gui = ScanGUI(test=TEST, save_frame_rate=SAVE_FRAME_RATE, session_name=session_name)
+        gui = ScanGUI(test=TEST, session_name=session_name)
         
         try:
             session_success = gui.run(connect_attempt_limit=10)
