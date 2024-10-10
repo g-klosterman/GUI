@@ -40,7 +40,7 @@ class ScanGUI:
         'STAIR': 'INFINITY'
     }
 
-    def __init__(self, test, session_name, use_ip=False):
+    def __init__(self, test, session_name, use_ip=True):
         """
         Initialize a session of the GUI client. Set test to True to connect to a server at localhost or False to connect
         to the server running on a separately connected camera device.

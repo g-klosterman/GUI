@@ -48,8 +48,16 @@ class CameraClient:
             config_dict = json.loads(config_json)
             self._packet_size = config_dict['PACKET_SIZE']
 
-        except ConnectionRefusedError as e:
-            raise e
+        except socket.gaierror as e:
+            print(f"DNS resolution failed for {self._host}. Error: {e}")
+            print("Please ensure the hostname is correct or try using an IP address.")
+            return False
+        except ConnectionRefusedError:
+            print(f"Connection refused to {self._host}:{self._port}")
+            return False
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            return False
 
         return config_dict
 

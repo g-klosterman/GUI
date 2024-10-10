@@ -6,7 +6,7 @@ import shutil
 from scanGUI import ScanGUI
 
 # If set to True, will attempt to connect to localhost instead of external camera system
-TEST = True
+TEST = False
 SAVE_FRAME_RATE = 0     # Frame rate to save animated frames for later viewing. Will not save if set to 0 or negative.
 
 
@@ -55,13 +55,13 @@ def main():
 
             run = False
 
-        # Compile the recorded frames into a video
-        if session_success:
-            print('Compiling video, please wait...')
-            makeVideo(file_name=session_name, image_folder=session_name, frame_rate=gui.get_avg_frame_rate())
-        # If the session failed to connect, delete the frames that were saved and the folder containing them
-        elif os.path.exists(session_name):
-            shutil.rmtree(session_name)
+        # # Compile the recorded frames into a video
+        # if session_success:
+        #     print('Compiling video, please wait...')
+        #     makeVideo(file_name=session_name, image_folder=session_name, frame_rate=gui.get_avg_frame_rate())
+        # # If the session failed to connect, delete the frames that were saved and the folder containing them
+        # elif os.path.exists(session_name):
+        #     shutil.rmtree(session_name)
 
 
 if __name__ == '__main__':
